@@ -109,14 +109,14 @@ main{padding:12px;display:grid;gap:12px}
       <div class="settingsStack">
         <div class="settingsBlock">
           <h3>My Setup</h3>
-          <p>Save your current sections, actionables, notes, schedules and calendar choices as your personal preset.</p>
+          <p>Your personal 6-section setup is built into this app. You can also save later edits on this device.</p>
           <button class="btn primary" type="button" data-action="save-my-setup">Save Current as My Setup</button>
           <div class="settingsStatus" id="mySetupStatus"></div>
         </div>
         <div class="settingsBlock">
-          <h3>Auto-fill My Setup</h3>
+          <h3>Load My Stuff</h3>
           <p>Replace the current map with your saved personal setup. Your current photo stays unchanged.</p>
-          <button class="btn" type="button" data-action="autofill-my-setup">Auto-fill My Setup</button>
+          <button class="btn" type="button" data-action="autofill-my-setup">Load My Stuff</button>
         </div>
       </div>
     </div>
@@ -177,9 +177,38 @@ const diffDays=(a,b)=>Math.floor((new Date(b.getFullYear(),b.getMonth(),b.getDat
 const uid=()=>`id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
 function schedule(type,start='2026-09-01',time='',extra={}){return {type,startDate:start,time,interval:1,unit:'day',weekdays:[],endType:'never',endDate:'',...extra};}
 function makeBlankModel(){return {version:2,layout:'blank',sectionCount:6,layerCount:7,sections:Array.from({length:8},(_,i)=>({id:`section-${i+1}`,name:`Section ${i+1}`,actions:[]})),extras:[],mapPhoto:''};}
+const SOURCE_ACTIONS=[
+['IHSAN','Prayer','×7','Daily'],['IHSAN','Family','Check Each','Weekly'],['IHSAN','Income (Zakāt)','x1 Finan/$20','Daily/Weekly'],['IHSAN','Rights','—','All Time'],['IHSAN','Avoid Ḥarām','Quit Yesterday','All Time'],['IHSAN','Ramadan','Plan in Jan','Ramadan'],['IHSAN','Ḥajj/Ummrah','Plan in Jan','Both Once'],
+['ḤASANAH','Qur’an','×2','Daily'],['ḤASANAH','Duʿā','×2','Daily'],['ḤASANAH','Surah Al-Baqarah','×1','3 Days'],['ḤASANAH','Seerah','×1 (w/Notes)','Weekly'],['ḤASANAH','Fasting','×2','Weekly'],['ḤASANAH','Tahajjud','×7','Weekly'],['ḤASANAH','Dhikr','5 min','Daily'],
+['ṢABR','Āyat al-Kursī','Min ×7','Daily'],['ṢABR','Standard Routines','All in Calendar','All Time'],['ṢABR','Control Eating','—','All Time'],['ṢABR','Sleep Early','Isha Bedtime','Daily'],['ṢABR','Supplements','×2','Daily'],['ṢABR','Stretching / Knee Recovery','×1','Daily'],['ṢABR','Gym','×2','Weekly'],
+['ʿAQL','Study Islam','×1 (w/Notes)','Weekly'],['ʿAQL','Grow Business','×1','Daily'],['ʿAQL','Read','Min ×2','Daily'],['ʿAQL','Fix Speech (Written)','Learn Techniques','Weekly'],['ʿAQL','Tafsīr','×1','Weekly'],['ʿAQL','Philosophy','×1','Weekly'],['ʿAQL','Learn Arabic','10 min','Daily'],
+['WAQT','Friends','Min ×1','Weekly / Asked'],['WAQT','Feed Poor','×1','Opportunity'],['WAQT','Serve General','—','Opportunity'],['WAQT','Riley','×1','2 Weeks'],['WAQT','Community','Apply Sunday / ×1','2 Weeks'],['WAQT','Neighbours','Pleasantries','Opportunity'],['WAQT','Mosque','×1','Weekly'],
+['NIYYA','Recitation','×1','Weekly'],['NIYYA','Pre-Speech Breath','—','All Time'],['NIYYA','Avoid Backbiting','—','All Time'],['NIYYA','Breathwork','×10','Daily'],['NIYYA','Gratitude','—','Nightly'],['NIYYA','Check Desire','—','All Time'],['NIYYA','Less Phone (Check)','Limit Apps','All Time']
+];
+const SECTION_ORDER=['IHSAN','ḤASANAH','ṢABR','ʿAQL','WAQT','NIYYA'];
+function presetSchedule(category,name,notes,freq){
+  const weekly={'Family':[3],'Seerah':[2],'Fasting':[4,0],'Gym':[5,0],'Study Islam':[1],'Fix Speech (Written)':[5],'Tafsīr':[2],'Philosophy':[4],'Friends':[3],'Mosque':[5],'Recitation':[1]};
+  const timeMap={'Duʿā':'05:15','Dhikr':'05:15','Tahajjud':'05:15','Learn Arabic':'09:30','Gratitude':'22:00','Āyat al-Kursī':'22:00','Sleep Early':'22:30'};
+  if(freq==='Daily'||freq==='Nightly') return schedule('daily','2026-09-01',timeMap[name]||'');
+  if(name==='Tahajjud') return schedule('daily','2026-09-01','05:15');
+  if(freq==='Weekly'||freq==='Weekly / Asked') return schedule('weekly','2026-09-01','',{weekdays:weekly[name]||[1]});
+  if(freq==='3 Days') return schedule('custom','2026-09-01','',{interval:3,unit:'day'});
+  if(freq==='2 Weeks'){const isCommunity=name==='Community';return schedule('custom',isCommunity?'2026-09-13':'2026-09-08','',{interval:2,unit:'week',weekdays:[isCommunity?0:2]});}
+  if(freq==='Daily/Weekly') return schedule('daily','2026-09-01','');
+  return schedule('none','2026-09-01','');
+}
+function makeMyLayout(){
+  const sections=SECTION_ORDER.map((name,i)=>({id:`preset-section-${i+1}`,name,actions:[]}));
+  SOURCE_ACTIONS.forEach(([cat,name,notes,freq])=>{const sec=sections.find(x=>x.name===cat);sec.actions.push({id:`preset-${cat}-${sec.actions.length+1}`,name,notes,sourceFrequency:freq,showOnCalendar:true,schedule:presetSchedule(cat,name,notes,freq)});});
+  while(sections.length<8)sections.push({id:`preset-section-${sections.length+1}`,name:`Section ${sections.length+1}`,actions:[]});
+  const extras=[['Fajr','05:15','daily'],['Morning Routine','09:30','daily'],['Coffee','09:30','daily'],['Read Quran','09:30','daily'],['Work','09:30','daily'],['Asr','15:30','daily'],['Magrib','19:30','daily'],['Isha','21:00','daily'],['Read Quran 10min','22:00','daily'],['Sleep by 11PM','23:00','daily']].map(([name,time,type],i)=>({id:`routine-${i+1}`,name,notes:'',color:'#627477',schedule:schedule(type,'2026-09-01',time)}));
+  return {version:4,layout:'mine',sectionCount:6,layerCount:7,sections,extras,mapPhoto:''};
+}
+
 let model;
 try{model=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');}catch(e){model=null;}
-if(!model||!Array.isArray(model.sections))model=makeBlankModel();
+if(!model||!Array.isArray(model.sections))model=makeMyLayout();
+else if((model.layout==='blank'||!model.layout)&&!model.sections.some(sec=>(sec.actions||[]).length))model=makeMyLayout();
 while(model.sections.length<8)model.sections.push({id:uid(),name:`Section ${model.sections.length+1}`,actions:[]});
 model.extras=model.extras||[];
 model.mapPhoto=model.mapPhoto||'';
@@ -191,9 +220,9 @@ let editorDaySet=new Set();
 function saveModel(){localStorage.setItem(STORAGE_KEY,JSON.stringify(model));}
 function presetSnapshot(){const x=clone(model);x.mapPhoto='';return x;}
 function hasMySetup(){try{return !!JSON.parse(localStorage.getItem(PRESET_KEY)||'null');}catch(e){return false;}}
-function renderSettings(){const el=$('mySetupStatus');if(el)el.textContent=hasMySetup()?'My Setup is saved on this device.':'No My Setup saved yet.';}
+function renderSettings(){const el=$('mySetupStatus');if(el)el.textContent=hasMySetup()?'Edited My Setup is also saved on this device.':'Built-in My Setup is ready.';}
 function saveMySetup(){try{localStorage.setItem(PRESET_KEY,JSON.stringify(presetSnapshot()));renderSettings();toast('My Setup saved');}catch(e){toast('Could not save setup');}}
-function autoFillMySetup(){let preset=null;try{preset=JSON.parse(localStorage.getItem(PRESET_KEY)||'null');}catch(e){}if(!preset){toast('Save My Setup first');return;}if(!confirm('Auto-fill your saved My Setup? This replaces the current map setup.'))return;const photo=model.mapPhoto||'';model=clone(preset);model.mapPhoto=photo;while(model.sections.length<8)model.sections.push({id:uid(),name:`Section ${model.sections.length+1}`,actions:[]});model.extras=model.extras||[];model.sections.forEach(sec=>(sec.actions||[]).forEach(a=>{if(typeof a.showOnCalendar!=='boolean')a.showOnCalendar=true;}));saveModel();closeOverlay('settingsOverlay');renderAll();toast('My Setup filled');}
+function autoFillMySetup(){if(!confirm('Auto-fill your built-in My Setup? This replaces the current map setup.'))return;const photo=model.mapPhoto||'';model=makeMyLayout();model.mapPhoto=photo;saveModel();closeOverlay('settingsOverlay');renderAll();toast('My Setup filled');}
 function toast(msg){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1400);}
 function openOverlay(id){$(id).classList.add('open');}
 function closeOverlay(id){$(id).classList.remove('open');}
