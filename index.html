@@ -70,13 +70,14 @@ main{padding:12px;display:grid;gap:12px}
           <button class="smallBtn" type="button" data-action="prev-month">‹</button>
           <button class="smallBtn" type="button" data-action="today">Today</button>
           <button class="smallBtn" type="button" data-action="next-month">›</button>
+          <button class="smallBtn active" type="button" data-action="add-calendar-item">+ Add</button>
         </div>
       </div>
       <div class="weekdays"><div>S</div><div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div></div>
       <div class="monthGrid" id="monthGrid"></div>
     </section>
     <section class="card" id="todoCard">
-      <div class="cardHead"><h2>To-do</h2><div class="muted" id="todoCount" style="font-size:11px"></div></div>
+      <div class="cardHead"><h2>To-do</h2><div style="display:flex;align-items:center;gap:8px"><div class="muted" id="todoCount" style="font-size:11px"></div><button class="smallBtn active" type="button" data-action="add-calendar-item">+ Add</button></div></div>
       <div class="todoBody" id="todoBody"></div>
     </section>
   </main>
@@ -161,6 +162,24 @@ main{padding:12px;display:grid;gap:12px}
     </div>
   </div>
 </div>
+
+<!-- CALENDAR ITEM EDITOR -->
+<div class="overlay" id="calendarItemOverlay" role="dialog" aria-modal="true" aria-label="Calendar item editor">
+  <div class="sheet">
+    <div class="sheetHead"><h2 id="calendarItemTitle">Calendar item</h2><button class="btn" type="button" data-action="close-calendar-item">Close</button></div>
+    <div class="sheetBody">
+      <input type="hidden" id="calendarItemId" />
+      <div><label class="label" for="calendarItemName">Title</label><input class="field" id="calendarItemName" placeholder="e.g. Appointment" /></div>
+      <div class="grid2 formSection">
+        <div><label class="label" for="calendarItemDate">Date</label><input class="field" id="calendarItemDate" type="date" /></div>
+        <div><label class="label" for="calendarItemTime">Time</label><input class="field" id="calendarItemTime" type="time" /></div>
+      </div>
+      <div class="formSection"><label class="label" for="calendarItemRepeat">Repeat</label><select class="field" id="calendarItemRepeat"><option value="once">Does not repeat</option><option value="daily">Every day</option><option value="weekly">Every week</option></select></div>
+      <div class="formSection"><label class="label" for="calendarItemNotes">Notes</label><textarea class="field" id="calendarItemNotes" rows="2" placeholder="Optional"></textarea></div>
+      <div class="formActions"><button class="btn danger" id="deleteCalendarItemBtn" type="button" data-action="delete-calendar-item">Delete</button><button class="btn primary" type="button" data-action="save-calendar-item">Save</button></div>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <script>
 'use strict';
@@ -201,8 +220,8 @@ function makeMyLayout(){
   const sections=SECTION_ORDER.map((name,i)=>({id:`preset-section-${i+1}`,name,actions:[]}));
   SOURCE_ACTIONS.forEach(([cat,name,notes,freq])=>{const sec=sections.find(x=>x.name===cat);sec.actions.push({id:`preset-${cat}-${sec.actions.length+1}`,name,notes,sourceFrequency:freq,showOnCalendar:true,schedule:presetSchedule(cat,name,notes,freq)});});
   while(sections.length<8)sections.push({id:`preset-section-${sections.length+1}`,name:`Section ${sections.length+1}`,actions:[]});
-  const extras=[['Fajr','05:15','daily'],['Morning Routine','09:30','daily'],['Coffee','09:30','daily'],['Read Quran','09:30','daily'],['Work','09:30','daily'],['Asr','15:30','daily'],['Magrib','19:30','daily'],['Isha','21:00','daily'],['Read Quran 10min','22:00','daily'],['Sleep by 11PM','23:00','daily']].map(([name,time,type],i)=>({id:`routine-${i+1}`,name,notes:'',color:'#627477',schedule:schedule(type,'2026-09-01',time)}));
-  return {version:4,layout:'mine',sectionCount:6,layerCount:7,sections,extras,mapPhoto:''};
+  const extras=[];
+  return {version:5,layout:'mine',sectionCount:6,layerCount:7,sections,extras,mapPhoto:''};
 }
 
 let model;
@@ -210,7 +229,8 @@ try{model=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');}catch(e){model=
 if(!model||!Array.isArray(model.sections))model=makeMyLayout();
 else if((model.layout==='blank'||!model.layout)&&!model.sections.some(sec=>(sec.actions||[]).length))model=makeMyLayout();
 while(model.sections.length<8)model.sections.push({id:uid(),name:`Section ${model.sections.length+1}`,actions:[]});
-model.extras=model.extras||[];
+model.extras=(model.extras||[]).filter(x=>!String(x.id||'').startsWith('routine-'));
+model.version=5;
 model.mapPhoto=model.mapPhoto||'';
 model.sections.forEach(sec=>(sec.actions||[]).forEach(a=>{if(typeof a.showOnCalendar!=='boolean')a.showOnCalendar=true;}));
 const now=new Date();
@@ -270,17 +290,46 @@ function openActionEditor(sectionId,actionId=null){const {sec,act}=findAction(se
 function renderActionScheduleControls(){const type=$('repeatType').value,unit=$('repeatUnit').value;const weekly=type==='weekly'||(type==='custom'&&unit==='week');$('weeklyBlock').hidden=!weekly;$('customBlock').hidden=type!=='custom';$('endBlock').hidden=type==='none'||type==='once';$('endDateBlock').hidden=$('endBlock').hidden||$('endType').value!=='date';document.querySelectorAll('.dayPick').forEach(b=>b.classList.toggle('active',editorDaySet.has(Number(b.dataset.day))));}
 function saveActionFromEditor(){const sec=model.sections.find(s=>s.id===$('actionSectionId').value);if(!sec)return;const id=$('actionId').value;let act=sec.actions.find(a=>a.id===id);const name=$('actionName').value.trim();if(!name){toast('Name the actionable');$('actionName').focus();return;}const type=$('repeatType').value,start=$('startDate').value||dateKey(selectedDate),unit=$('repeatUnit').value,interval=Math.max(1,Number($('repeatEvery').value)||1);let weekdays=[...editorDaySet].sort();if((type==='weekly'||(type==='custom'&&unit==='week'))&&!weekdays.length){weekdays=[parseDate(start).getDay()];}const s={type,startDate:start,time:$('actionTime').value||'',interval,unit,weekdays,endType:$('endType').value,endDate:$('endDate').value||''};const showOnCalendar=$('showOnCalendar').checked;if(act){act.name=name;act.notes=$('actionNotes').value.trim();act.schedule=s;act.showOnCalendar=showOnCalendar;}else{if(sec.actions.length>=model.layerCount){toast('This section is full');return;}sec.actions.push({id:uid(),name,notes:$('actionNotes').value.trim(),sourceFrequency:'',schedule:s,showOnCalendar});}saveModel();closeOverlay('actionOverlay');renderSetup();renderAll();toast('Saved');}
 function templateOccurs(t,date){const s=t.schedule;if(!s||s.type==='none')return false;const start=parseDate(s.startDate);if(!start||date<new Date(start.getFullYear(),start.getMonth(),start.getDate()))return false;if(s.endType==='date'&&s.endDate){const end=parseDate(s.endDate);if(end&&date>new Date(end.getFullYear(),end.getMonth(),end.getDate(),23,59,59))return false;}const dd=diffDays(start,date);if(dd<0)return false;if(s.type==='once')return dd===0;if(s.type==='daily')return dd%Math.max(1,s.interval||1)===0;if(s.type==='weekly'){const week=Math.floor(dd/7),days=s.weekdays?.length?s.weekdays:[start.getDay()];return week%Math.max(1,s.interval||1)===0&&days.includes(date.getDay());}if(s.type==='custom'){const n=Math.max(1,s.interval||1);if(s.unit==='day')return dd%n===0;const week=Math.floor(dd/7),days=s.weekdays?.length?s.weekdays:[start.getDay()];return week%n===0&&days.includes(date.getDay());}return false;}
+function openCalendarItemEditor(id=null){
+  const item=id?model.extras.find(x=>x.id===id):null;
+  $('calendarItemId').value=item?.id||'';
+  $('calendarItemName').value=item?.name||'';
+  $('calendarItemDate').value=item?.schedule?.startDate||dateKey(selectedDate);
+  $('calendarItemTime').value=item?.schedule?.time||'';
+  $('calendarItemRepeat').value=item?.schedule?.type||'once';
+  $('calendarItemNotes').value=item?.notes||'';
+  $('deleteCalendarItemBtn').style.visibility=item?'visible':'hidden';
+  $('calendarItemTitle').textContent=item?'Edit calendar item':'Add calendar item';
+  openOverlay('calendarItemOverlay');
+  setTimeout(()=>$('calendarItemName').focus(),50);
+}
+function saveCalendarItem(){
+  const id=$('calendarItemId').value,name=$('calendarItemName').value.trim(),start=$('calendarItemDate').value,time=$('calendarItemTime').value||'',type=$('calendarItemRepeat').value||'once';
+  if(!name){toast('Add a title');return;} if(!start){toast('Pick a date');return;}
+  let item=id?model.extras.find(x=>x.id===id):null;
+  const d=parseDate(start);
+  const sch=schedule(type,start,time,{weekdays:type==='weekly'&&d?[d.getDay()]:[]});
+  if(item){item.name=name;item.notes=$('calendarItemNotes').value.trim();item.schedule=sch;item.direct=true;}
+  else model.extras.push({id:uid(),name,notes:$('calendarItemNotes').value.trim(),color:'#627477',direct:true,schedule:sch});
+  saveModel();closeOverlay('calendarItemOverlay');renderAll();toast('Calendar item saved');
+}
+function deleteCalendarItem(){
+  const id=$('calendarItemId').value;if(!id)return;
+  if(!confirm('Delete this calendar item?'))return;
+  model.extras=model.extras.filter(x=>x.id!==id);saveModel();closeOverlay('calendarItemOverlay');renderAll();toast('Deleted');
+}
 function activeTemplates(){const arr=[];model.sections.slice(0,model.sectionCount).forEach(sec=>sec.actions.slice(0,model.layerCount).forEach((a,i)=>arr.push({...a,color:layerColor(i+1,model.layerCount),kind:'map'})));model.extras.forEach(x=>arr.push({...x,kind:'extra'}));return arr;}
 function tasksForDate(date){const key=dateKey(date),seen=new Set(),out=[];for(const t of activeTemplates()){if(!templateOccurs(t,date))continue;const normalized=t.name.trim().toLowerCase();if(seen.has(normalized))continue;seen.add(normalized);out.push({instanceId:`${t.id}|${key}`,templateId:t.id,label:t.name,time:t.schedule.time||'',color:t.color||'#637578',kind:t.kind,showOnCalendar:t.kind==='extra'?true:t.showOnCalendar!==false});}return out.sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99')||a.label.localeCompare(b.label));}
 function isDone(id){return localStorage.getItem(DONE_KEY+id)==='1';}function toggleDone(id){const k=DONE_KEY+id;localStorage.setItem(k,isDone(id)?'0':'1');}
 function renderCalendar(){$('monthTitle').textContent=viewMonth.toLocaleDateString('en-US',{month:'long',year:'numeric'});const root=$('monthGrid');root.innerHTML='';const first=new Date(viewMonth.getFullYear(),viewMonth.getMonth(),1),start=new Date(first);start.setDate(1-first.getDay());for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const cell=document.createElement('div');cell.className='dayCell'+(d.getMonth()!==viewMonth.getMonth()?' out':'')+(sameDay(d,selectedDate)?' selected':'')+(sameDay(d,now)?' today':'');cell.dataset.action='select-date';cell.dataset.date=dateKey(d);cell.innerHTML=`<div class="dayNum">${d.getDate()}</div>`;const tasks=tasksForDate(d).filter(t=>t.showOnCalendar),max=4;tasks.slice(0,max).forEach(t=>{const b=document.createElement('button');b.type='button';b.className='miniTask'+(isDone(t.instanceId)?' done':'');b.style.setProperty('--taskColor',t.color);b.dataset.action='toggle-task';b.dataset.instanceId=t.instanceId;b.dataset.date=dateKey(d);b.innerHTML=`<span class="miniCheck">${isDone(t.instanceId)?'✓':'□'}</span><span class="miniLabel">${esc(t.label)}</span>`;cell.appendChild(b);});if(tasks.length>max){const more=document.createElement('div');more.className='more';more.textContent=`+${tasks.length-max} more`;cell.appendChild(more);}root.appendChild(cell);}}
-function renderTodo(){const tasks=tasksForDate(selectedDate),root=$('todoBody');$('todoCount').textContent=`${tasks.filter(t=>isDone(t.instanceId)).length}/${tasks.length}`;root.innerHTML=`<div class="dateHeading">${selectedDate.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</div>`;if(!tasks.length){root.innerHTML+='<div class="emptyTodo">No scheduled actionables for this day.</div>';return;}let group='';for(const t of tasks){const g=t.time?formatTime(t.time):'Any time';if(g!==group){group=g;const h=document.createElement('div');h.className='timeGroup';h.textContent=g;root.appendChild(h);}const row=document.createElement('button');row.type='button';row.className='todoRow'+(isDone(t.instanceId)?' done':'');row.dataset.action='toggle-task';row.dataset.instanceId=t.instanceId;row.dataset.date=dateKey(selectedDate);row.style.setProperty('--taskColor',t.color);row.innerHTML=`<span class="todoCheck">${isDone(t.instanceId)?'✓':''}</span><span class="todoAccent"></span><span class="todoLabel">${esc(t.label)}</span>`;root.appendChild(row);}}
+function renderTodo(){const tasks=tasksForDate(selectedDate),root=$('todoBody');$('todoCount').textContent=`${tasks.filter(t=>isDone(t.instanceId)).length}/${tasks.length}`;root.innerHTML=`<div class="dateHeading">${selectedDate.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</div>`;if(!tasks.length){root.innerHTML+='<div class="emptyTodo">Nothing scheduled for this day.</div>';return;}let group='';for(const t of tasks){const g=t.time?formatTime(t.time):'Any time';if(g!==group){group=g;const h=document.createElement('div');h.className='timeGroup';h.textContent=g;root.appendChild(h);}const row=document.createElement('div');row.className='todoRow'+(isDone(t.instanceId)?' done':'');row.style.setProperty('--taskColor',t.color);row.innerHTML=`<button type="button" style="all:unset;display:flex;align-items:center;gap:10px;min-width:0;flex:1;cursor:pointer" data-action="toggle-task" data-instance-id="${esc(t.instanceId)}" data-date="${dateKey(selectedDate)}"><span class="todoCheck">${isDone(t.instanceId)?'✓':''}</span><span class="todoAccent"></span><span class="todoLabel">${esc(t.label)}</span></button>${t.kind==='extra'?`<button class="smallBtn" type="button" data-action="edit-calendar-item" data-template-id="${esc(t.templateId)}">Edit</button>`:''}`;root.appendChild(row);}}
 function renderAll(){renderMap();renderCalendar();renderTodo();}
 function resizePhoto(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=reject;reader.onload=()=>{const img=new Image();img.onerror=reject;img.onload=()=>{const max=512,scale=Math.min(1,max/Math.max(img.width,img.height)),w=Math.max(1,Math.round(img.width*scale)),h=Math.max(1,Math.round(img.height*scale)),canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;canvas.getContext('2d').drawImage(img,0,0,w,h);resolve(canvas.toDataURL('image/jpeg',.82));};img.src=reader.result;};reader.readAsDataURL(file);});}
-document.addEventListener('click',e=>{const el=e.target.closest('[data-action]');if(!el)return;const a=el.dataset.action;if(a==='open-settings'){renderSettings();openOverlay('settingsOverlay');}else if(a==='close-settings'){closeOverlay('settingsOverlay');}else if(a==='save-my-setup'){saveMySetup();}else if(a==='autofill-my-setup'){autoFillMySetup();}else if(a==='open-setup'){renderSetup();openOverlay('setupOverlay');}else if(a==='setup-done'||a==='setup-home'){saveModel();closeOverlay('setupOverlay');renderAll();}else if(a==='add-action')openActionEditor(el.dataset.sectionId);else if(a==='edit-action')openActionEditor(el.dataset.sectionId,el.dataset.actionId);else if(a==='toggle-calendar'){e.stopPropagation();const {act}=findAction(el.dataset.sectionId,el.dataset.actionId);if(act){act.showOnCalendar=act.showOnCalendar===false;saveModel();renderSetup();renderCalendar();toast(act.showOnCalendar?'Shown on calendar':'Hidden from calendar');}}else if(a==='move-action-up'||a==='move-action-down'){const sec=model.sections.find(s=>s.id===el.dataset.sectionId),i=sec?.actions.findIndex(x=>x.id===el.dataset.actionId)??-1;if(i>=0){const j=a==='move-action-up'?i-1:i+1;if(j>=0&&j<sec.actions.length){[sec.actions[i],sec.actions[j]]=[sec.actions[j],sec.actions[i]];saveModel();renderSetup();renderAll();}}}else if(a==='close-action')closeOverlay('actionOverlay');else if(a==='pick-day'){const n=Number(el.dataset.day);editorDaySet.has(n)?editorDaySet.delete(n):editorDaySet.add(n);renderActionScheduleControls();}else if(a==='save-action')saveActionFromEditor();else if(a==='delete-action'){const sec=model.sections.find(s=>s.id===$('actionSectionId').value),id=$('actionId').value;if(sec&&id&&confirm('Delete this actionable?')){sec.actions=sec.actions.filter(x=>x.id!==id);saveModel();closeOverlay('actionOverlay');renderSetup();renderAll();}}else if(a==='choose-photo')$('mapPhotoInput').click();else if(a==='prev-month'){viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()-1,1);renderCalendar();}else if(a==='next-month'){viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);renderCalendar();}else if(a==='today'){selectedDate=new Date(now.getFullYear(),now.getMonth(),now.getDate());viewMonth=new Date(now.getFullYear(),now.getMonth(),1);renderCalendar();renderTodo();}else if(a==='select-date'){selectedDate=parseDate(el.dataset.date);viewMonth=new Date(selectedDate.getFullYear(),selectedDate.getMonth(),1);renderCalendar();renderTodo();$('todoCard').scrollIntoView({behavior:'smooth',block:'start'});}else if(a==='toggle-task'){e.stopPropagation();toggleDone(el.dataset.instanceId);const d=parseDate(el.dataset.date);if(d)selectedDate=d;renderCalendar();renderTodo();}});
+document.addEventListener('click',e=>{const el=e.target.closest('[data-action]');if(!el)return;const a=el.dataset.action;if(a==='open-settings'){renderSettings();openOverlay('settingsOverlay');}else if(a==='close-settings'){closeOverlay('settingsOverlay');}else if(a==='save-my-setup'){saveMySetup();}else if(a==='autofill-my-setup'){autoFillMySetup();}else if(a==='add-calendar-item'){openCalendarItemEditor();}else if(a==='edit-calendar-item'){e.stopPropagation();openCalendarItemEditor(el.dataset.templateId);}else if(a==='close-calendar-item'){closeOverlay('calendarItemOverlay');}else if(a==='save-calendar-item'){saveCalendarItem();}else if(a==='delete-calendar-item'){deleteCalendarItem();}else if(a==='open-setup'){renderSetup();openOverlay('setupOverlay');}else if(a==='setup-done'||a==='setup-home'){saveModel();closeOverlay('setupOverlay');renderAll();}else if(a==='add-action')openActionEditor(el.dataset.sectionId);else if(a==='edit-action')openActionEditor(el.dataset.sectionId,el.dataset.actionId);else if(a==='toggle-calendar'){e.stopPropagation();const {act}=findAction(el.dataset.sectionId,el.dataset.actionId);if(act){act.showOnCalendar=act.showOnCalendar===false;saveModel();renderSetup();renderCalendar();toast(act.showOnCalendar?'Shown on calendar':'Hidden from calendar');}}else if(a==='move-action-up'||a==='move-action-down'){const sec=model.sections.find(s=>s.id===el.dataset.sectionId),i=sec?.actions.findIndex(x=>x.id===el.dataset.actionId)??-1;if(i>=0){const j=a==='move-action-up'?i-1:i+1;if(j>=0&&j<sec.actions.length){[sec.actions[i],sec.actions[j]]=[sec.actions[j],sec.actions[i]];saveModel();renderSetup();renderAll();}}}else if(a==='close-action')closeOverlay('actionOverlay');else if(a==='pick-day'){const n=Number(el.dataset.day);editorDaySet.has(n)?editorDaySet.delete(n):editorDaySet.add(n);renderActionScheduleControls();}else if(a==='save-action')saveActionFromEditor();else if(a==='delete-action'){const sec=model.sections.find(s=>s.id===$('actionSectionId').value),id=$('actionId').value;if(sec&&id&&confirm('Delete this actionable?')){sec.actions=sec.actions.filter(x=>x.id!==id);saveModel();closeOverlay('actionOverlay');renderSetup();renderAll();}}else if(a==='choose-photo')$('mapPhotoInput').click();else if(a==='prev-month'){viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()-1,1);renderCalendar();}else if(a==='next-month'){viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);renderCalendar();}else if(a==='today'){selectedDate=new Date(now.getFullYear(),now.getMonth(),now.getDate());viewMonth=new Date(now.getFullYear(),now.getMonth(),1);renderCalendar();renderTodo();}else if(a==='select-date'){selectedDate=parseDate(el.dataset.date);viewMonth=new Date(selectedDate.getFullYear(),selectedDate.getMonth(),1);renderCalendar();renderTodo();$('todoCard').scrollIntoView({behavior:'smooth',block:'start'});}else if(a==='toggle-task'){e.stopPropagation();toggleDone(el.dataset.instanceId);const d=parseDate(el.dataset.date);if(d)selectedDate=d;renderCalendar();renderTodo();}});
 document.addEventListener('change',async e=>{if(e.target.id==='sectionCount'){const n=Number(e.target.value);if(n<model.sectionCount&&!confirm('Hide the extra sections? Their data will be preserved.')){e.target.value=model.sectionCount;return;}model.sectionCount=n;saveModel();renderSetup();renderAll();}else if(e.target.id==='layerCount'){const n=Math.max(1,Math.min(12,Number(e.target.value)||1));if(n<model.layerCount&&!confirm('Hide actionables beyond this layer count? Their data will be preserved.')){e.target.value=model.layerCount;return;}model.layerCount=n;e.target.value=n;saveModel();renderSetup();renderAll();}else if(e.target.dataset.action==='rename-section'){const sec=model.sections.find(s=>s.id===e.target.dataset.sectionId);if(sec){sec.name=e.target.value.trim()||'Untitled';saveModel();renderMap();}}else if(['repeatType','repeatUnit','endType'].includes(e.target.id))renderActionScheduleControls();else if(e.target.id==='mapPhotoInput'&&e.target.files?.[0]){try{model.mapPhoto=await resizePhoto(e.target.files[0]);saveModel();renderMap();toast('Photo added');}catch(err){toast('Could not add photo');}e.target.value='';}});
 $('actionOverlay').addEventListener('click',e=>{if(e.target===$('actionOverlay'))closeOverlay('actionOverlay');});
 $('settingsOverlay').addEventListener('click',e=>{if(e.target===$('settingsOverlay'))closeOverlay('settingsOverlay');});
+$('calendarItemOverlay').addEventListener('click',e=>{if(e.target===$('calendarItemOverlay'))closeOverlay('calendarItemOverlay');});
 renderAll();
 if(model.layout==='blank'&&!model.sections.slice(0,model.sectionCount).some(s=>s.actions.length)){renderSetup();openOverlay('setupOverlay');}
 </script>
