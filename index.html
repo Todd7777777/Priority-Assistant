@@ -220,8 +220,19 @@ function makeMyLayout(){
   const sections=SECTION_ORDER.map((name,i)=>({id:`preset-section-${i+1}`,name,actions:[]}));
   SOURCE_ACTIONS.forEach(([cat,name,notes,freq])=>{const sec=sections.find(x=>x.name===cat);sec.actions.push({id:`preset-${cat}-${sec.actions.length+1}`,name,notes,sourceFrequency:freq,showOnCalendar:true,schedule:presetSchedule(cat,name,notes,freq)});});
   while(sections.length<8)sections.push({id:`preset-section-${sections.length+1}`,name:`Section ${sections.length+1}`,actions:[]});
-  const extras=[];
-  return {version:5,layout:'mine',sectionCount:6,layerCount:7,sections,extras,mapPhoto:''};
+  const extras=[
+    {id:'routine-fajr',name:'Fajr',notes:'',color:'#627477',direct:false,showOnCalendar:false,schedule:schedule('daily','2026-09-01','05:15')},
+    {id:'routine-morning',name:'Morning Routine',notes:'',color:'#627477',direct:false,showOnCalendar:false,schedule:schedule('daily','2026-09-01','09:30')},
+    {id:'routine-coffee',name:'Coffee',notes:'',color:'#627477',direct:false,showOnCalendar:false,schedule:schedule('daily','2026-09-01','09:30')},
+    {id:'routine-read-quran-am',name:'Read Quran',notes:'',color:'#627477',direct:false,showOnCalendar:false,schedule:schedule('daily','2026-09-01','09:30')},
+    {id:'routine-work',name:'Work',notes:'',color:'#627477',direct:false,showOnCalendar:false,schedule:schedule('daily','2026-09-01','09:30')},
+    {id:'routine-asr',name:'Asr',notes:'',color:'#627477',direct:false,showOnCalendar:false,schedule:schedule('daily','2026-09-01','15:30')},
+    {id:'routine-magrib',name:'Magrib',notes:'',color:'#627477',direct:false,showOnCalendar:false,schedule:schedule('daily','2026-09-01','19:30')},
+    {id:'routine-isha',name:'Isha',notes:'',color:'#627477',direct:false,showOnCalendar:false,schedule:schedule('daily','2026-09-01','21:00')},
+    {id:'routine-read-quran-pm',name:'Read Quran 10min',notes:'',color:'#627477',direct:false,showOnCalendar:false,schedule:schedule('daily','2026-09-01','22:00')},
+    {id:'routine-sleep',name:'Sleep by 11PM',notes:'',color:'#627477',direct:false,showOnCalendar:false,schedule:schedule('daily','2026-09-01','23:00')}
+  ];
+  return {version:6,layout:'mine',sectionCount:6,layerCount:7,sections,extras,mapPhoto:''};
 }
 
 let model;
@@ -229,8 +240,11 @@ try{model=JSON.parse(localStorage.getItem(STORAGE_KEY)||'null');}catch(e){model=
 if(!model||!Array.isArray(model.sections))model=makeMyLayout();
 else if((model.layout==='blank'||!model.layout)&&!model.sections.some(sec=>(sec.actions||[]).length))model=makeMyLayout();
 while(model.sections.length<8)model.sections.push({id:uid(),name:`Section ${model.sections.length+1}`,actions:[]});
-model.extras=(model.extras||[]).filter(x=>!String(x.id||'').startsWith('routine-'));
-model.version=5;
+model.extras=model.extras||[];
+const routineDefaults=makeMyLayout().extras;
+for(const r of routineDefaults){if(!model.extras.some(x=>x.id===r.id))model.extras.push(r);}
+model.extras.forEach(x=>{if(String(x.id||'').startsWith('routine-'))x.showOnCalendar=false;});
+model.version=6;
 model.mapPhoto=model.mapPhoto||'';
 model.sections.forEach(sec=>(sec.actions||[]).forEach(a=>{if(typeof a.showOnCalendar!=='boolean')a.showOnCalendar=true;}));
 const now=new Date();
@@ -319,7 +333,7 @@ function deleteCalendarItem(){
   model.extras=model.extras.filter(x=>x.id!==id);saveModel();closeOverlay('calendarItemOverlay');renderAll();toast('Deleted');
 }
 function activeTemplates(){const arr=[];model.sections.slice(0,model.sectionCount).forEach(sec=>sec.actions.slice(0,model.layerCount).forEach((a,i)=>arr.push({...a,color:layerColor(i+1,model.layerCount),kind:'map'})));model.extras.forEach(x=>arr.push({...x,kind:'extra'}));return arr;}
-function tasksForDate(date){const key=dateKey(date),seen=new Set(),out=[];for(const t of activeTemplates()){if(!templateOccurs(t,date))continue;const normalized=t.name.trim().toLowerCase();if(seen.has(normalized))continue;seen.add(normalized);out.push({instanceId:`${t.id}|${key}`,templateId:t.id,label:t.name,time:t.schedule.time||'',color:t.color||'#637578',kind:t.kind,showOnCalendar:t.kind==='extra'?true:t.showOnCalendar!==false});}return out.sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99')||a.label.localeCompare(b.label));}
+function tasksForDate(date){const key=dateKey(date),seen=new Set(),out=[];for(const t of activeTemplates()){if(!templateOccurs(t,date))continue;const normalized=t.name.trim().toLowerCase();if(seen.has(normalized))continue;seen.add(normalized);out.push({instanceId:`${t.id}|${key}`,templateId:t.id,label:t.name,time:t.schedule.time||'',color:t.color||'#637578',kind:t.kind,showOnCalendar:t.showOnCalendar!==false});}return out.sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99')||a.label.localeCompare(b.label));}
 function isDone(id){return localStorage.getItem(DONE_KEY+id)==='1';}function toggleDone(id){const k=DONE_KEY+id;localStorage.setItem(k,isDone(id)?'0':'1');}
 function renderCalendar(){$('monthTitle').textContent=viewMonth.toLocaleDateString('en-US',{month:'long',year:'numeric'});const root=$('monthGrid');root.innerHTML='';const first=new Date(viewMonth.getFullYear(),viewMonth.getMonth(),1),start=new Date(first);start.setDate(1-first.getDay());for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const cell=document.createElement('div');cell.className='dayCell'+(d.getMonth()!==viewMonth.getMonth()?' out':'')+(sameDay(d,selectedDate)?' selected':'')+(sameDay(d,now)?' today':'');cell.dataset.action='select-date';cell.dataset.date=dateKey(d);cell.innerHTML=`<div class="dayNum">${d.getDate()}</div>`;const tasks=tasksForDate(d).filter(t=>t.showOnCalendar),max=4;tasks.slice(0,max).forEach(t=>{const b=document.createElement('button');b.type='button';b.className='miniTask'+(isDone(t.instanceId)?' done':'');b.style.setProperty('--taskColor',t.color);b.dataset.action='toggle-task';b.dataset.instanceId=t.instanceId;b.dataset.date=dateKey(d);b.innerHTML=`<span class="miniCheck">${isDone(t.instanceId)?'✓':'□'}</span><span class="miniLabel">${esc(t.label)}</span>`;cell.appendChild(b);});if(tasks.length>max){const more=document.createElement('div');more.className='more';more.textContent=`+${tasks.length-max} more`;cell.appendChild(more);}root.appendChild(cell);}}
 function renderTodo(){const tasks=tasksForDate(selectedDate),root=$('todoBody');$('todoCount').textContent=`${tasks.filter(t=>isDone(t.instanceId)).length}/${tasks.length}`;root.innerHTML=`<div class="dateHeading">${selectedDate.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'})}</div>`;if(!tasks.length){root.innerHTML+='<div class="emptyTodo">Nothing scheduled for this day.</div>';return;}let group='';for(const t of tasks){const g=t.time?formatTime(t.time):'Any time';if(g!==group){group=g;const h=document.createElement('div');h.className='timeGroup';h.textContent=g;root.appendChild(h);}const row=document.createElement('div');row.className='todoRow'+(isDone(t.instanceId)?' done':'');row.style.setProperty('--taskColor',t.color);row.innerHTML=`<button type="button" style="all:unset;display:flex;align-items:center;gap:10px;min-width:0;flex:1;cursor:pointer" data-action="toggle-task" data-instance-id="${esc(t.instanceId)}" data-date="${dateKey(selectedDate)}"><span class="todoCheck">${isDone(t.instanceId)?'✓':''}</span><span class="todoAccent"></span><span class="todoLabel">${esc(t.label)}</span></button>${t.kind==='extra'?`<button class="smallBtn" type="button" data-action="edit-calendar-item" data-template-id="${esc(t.templateId)}">Edit</button>`:''}`;root.appendChild(row);}}
