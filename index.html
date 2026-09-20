@@ -84,6 +84,40 @@ main{padding:12px;display:grid;gap:12px}
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Priority Assistant">
+
+<style id="settingsHierarchyPatch">
+.settingsMenu{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--card)}
+.settingsRow,.settingsActionRow{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;padding:15px 14px;display:flex;align-items:center;justify-content:space-between;text-align:left;color:var(--text);font:inherit;cursor:pointer}
+.settingsRow:last-child,.settingsActionRow:last-child{border-bottom:0}
+.settingsRow b{display:block;font-size:14px}
+.settingsRow small{display:block;color:var(--muted);font-size:11px;margin-top:3px;font-weight:400}
+.settingsRow>span:last-child,.settingsActionRow>span:last-child{font-size:22px;color:var(--muted)}
+.settingsSubpage .settingsBlock{margin-bottom:12px}
+.settingsBack{margin-right:8px}
+#settingsOverlay .sheetHead h2{flex:1;text-align:center}
+</style>
+
+<style id="headerCenterPatch">
+header .brandGroup{position:relative;width:100%;justify-content:flex-start!important}
+header .brand{position:absolute;left:50%;transform:translateX(-50%);white-space:nowrap;text-align:center}
+header .mapSwitcher{position:relative;z-index:2;order:0}
+@media(max-width:520px){
+  header .brand{font-size:clamp(15px,4.3vw,20px)}
+  header .mapSwitcher{max-width:34vw}
+}
+</style>
+
+<style id="headerCenterFix2">
+.topbar{position:relative!important;display:grid!important;grid-template-columns:minmax(0,1fr) auto!important;align-items:center!important}
+.topbar .brandGroup{position:static!important;width:auto!important;min-width:0!important;display:flex!important;justify-content:flex-start!important}
+.topbar .brand{position:absolute!important;left:50%!important;top:50%!important;transform:translate(-50%,-50%)!important;margin:0!important;width:max-content!important;max-width:42vw!important;text-align:center!important;z-index:1!important;pointer-events:none!important}
+.topbar .mapSwitcher{position:relative!important;z-index:3!important;max-width:min(240px,32vw)!important}
+.topbar>[data-action="open-settings"]{position:relative!important;z-index:3!important}
+@media(max-width:600px){
+ .topbar .brand{max-width:38vw!important;font-size:16px!important}
+ .topbar .mapSwitcher{max-width:30vw!important}
+}
+</style>
 </head>
 <body>
 <div class="app" id="app">
@@ -144,20 +178,41 @@ main{padding:12px;display:grid;gap:12px}
 <!-- SETTINGS -->
 <div class="overlay" id="settingsOverlay" role="dialog" aria-modal="true" aria-label="Settings">
   <div class="sheet">
-    <div class="sheetHead"><h2>Settings</h2><button class="btn" type="button" data-action="close-settings">Close</button></div>
-    <div class="sheetBody"><div class="widgetPreview"><h3>Home Screen Widget</h3><div class="muted" style="font-size:11px">Today’s priorities · test preview</div><div class="widgetRows" id="widgetRows"></div><div class="muted" id="widgetPriorityTime" style="font-size:11px;margin-top:10px">Estimated Priority Time: 0 min</div></div>
-      <div class="settingsStack">
+    <div class="sheetHead"><button class="btn settingsBack" id="settingsBackBtn" type="button" hidden>Back</button><h2 id="settingsTitle">Settings</h2><button class="btn" type="button" data-action="close-settings">Close</button></div>
+    <div class="sheetBody">
+      <div id="settingsHome" class="settingsMenu">
+        <button class="settingsRow" type="button" data-settings-page="priority-maps"><span><b>Maps</b><small>Create, adjust, and share maps</small></span><span>›</span></button>
+        <button class="settingsRow" type="button" data-settings-page="priority-time"><span><b>Priority Time</b><small>Estimated time display</small></span><span>›</span></button>
+        <button class="settingsRow" type="button" data-settings-page="print-export"><span><b>Print / Export</b><small>Today, Week, or Month</small></span><span>›</span></button>
+        <button class="settingsRow" type="button" data-settings-page="about"><span><b>About</b><small>Mission, vision, and values</small></span><span>›</span></button>
+      </div>
+
+      <div class="settingsSubpage" id="settings-priority-maps" hidden>
         <div class="settingsBlock">
-          <h3>My Setup</h3>
-          <p>Your personal 6-section setup is built into this app. You can also save later edits on this device.</p>
-          <button class="btn primary" type="button" data-action="save-my-setup">Save Current as My Setup</button>
-          <div class="settingsStatus" id="mySetupStatus"></div>
+          <button class="settingsActionRow" type="button" data-action="new-map"><span>Create New Map</span><span>›</span></button>
+          <button class="settingsActionRow" type="button" data-action="choose-photo"><span>Change Map Photo</span><span>›</span></button>
+          <button class="settingsActionRow" type="button" id="sharePriorityMapBtn"><span>Share Priority Map</span><span>›</span></button>
         </div>
-        <div class="settingsBlock"><h3>Print / Export</h3><p>Paper layouts designed for offline use. Choose the period you need.</p><div class="printBtns" style="grid-template-columns:repeat(3,1fr)"><button class="btn" data-action="print-today">Today</button><button class="btn" data-action="print-week">Week</button><button class="btn" data-action="print-month">Month</button></div></div>
-        <div class="settingsBlock"><h3>Priority Time</h3><div class="toggleLine"><span>Show Estimated Priority Time</span><input id="showPriorityTime" type="checkbox" checked></div><div class="toggleLine"><span>Show weekly average</span><input id="showWeeklyAverage" type="checkbox"></div></div>
-        <div class="settingsBlock"><h3>Priority Maps</h3><p>Create, switch, and adjust Priority Maps. Structural and photo controls are kept here rather than on the home map.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-action="new-map">Create New Map</button><button class="btn" type="button" data-action="choose-photo">Change Map Photo</button></div><details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--muted);padding:6px 0">Map structure</summary><div class="grid2" style="margin-top:8px"><div><label class="label" for="settingsSectionCount">Sections</label><select class="field" id="settingsSectionCount"><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></div><div><label class="label" for="settingsLayerCount">Actionables / section</label><input class="field" id="settingsLayerCount" type="number" min="1" max="8" inputmode="numeric" /></div></div></details></div>
-        <div class="settingsBlock"><h3>About</h3><p>Mission, vision, and values behind Priority Assistant.</p><button class="btn" type="button" data-action="open-about">About Priority Assistant</button></div>
-        
+        <div class="settingsBlock">
+          <h3>Map Structure</h3>
+          <div class="grid2"><div><label class="label" for="settingsSectionCount">Sections</label><select class="field" id="settingsSectionCount"><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></div><div><label class="label" for="settingsLayerCount">Actionables / section</label><input class="field" id="settingsLayerCount" type="number" min="1" max="8" inputmode="numeric" /></div></div>
+        </div>
+      </div>
+
+      <div class="settingsSubpage" id="settings-priority-time" hidden>
+        <div class="settingsBlock">
+          <div class="toggleLine"><span>Show Estimated Priority Time</span><input id="showPriorityTime" type="checkbox" checked></div>
+          <div class="toggleLine"><span>Show weekly average</span><input id="showWeeklyAverage" type="checkbox"></div>
+        </div>
+      </div>
+
+      <div class="settingsSubpage" id="settings-print-export" hidden>
+        <div class="settingsBlock"><p>Paper layouts designed for offline use.</p><div class="printBtns" style="grid-template-columns:repeat(3,1fr)"><button class="btn" data-action="print-today">Today</button><button class="btn" data-action="print-week">Week</button><button class="btn" data-action="print-month">Month</button></div></div>
+      </div>
+
+      <div class="settingsSubpage" id="settings-about" hidden>
+        <div class="settingsBlock"><button class="settingsActionRow" type="button" data-action="open-about"><span>About Priority Assistant</span><span>›</span></button></div>
+      </div>
     </div>
   </div>
 </div>
@@ -370,7 +425,7 @@ function persistMapStore(){
 }
 function renderMapSwitcher(){
   const el=document.getElementById('mapSwitcher'); if(!el)return;
-  el.innerHTML=Object.entries(mapStore.maps).map(([id,x])=>`<option value="${id}"${id===activeMapId?' selected':''}>${esc(x.name)}</option>`).join('')+`<option value="__new__">+ New Map</option>`;
+  el.innerHTML=`<option value="${activeMapId}" selected>Maps</option><option value="__choose__">Choose Map</option><option value="__new__">+ New Map</option>`;
 }
 
 function createNewPriorityMap(){
@@ -628,6 +683,13 @@ function resizePhoto(file){return new Promise((resolve,reject)=>{const reader=ne
 document.addEventListener('click',e=>{const editRow=todoEditMode?e.target.closest('.todoRow'):null;if(editRow&&!e.target.closest('[data-action="toggle-task"]')){editTodoTask(editRow);return;}const el=e.target.closest('[data-action]');if(!el)return;const a=el.dataset.action;if(a==='open-settings'){renderSettings();openOverlay('settingsOverlay');}else if(a==='close-settings'){closeOverlay('settingsOverlay');}else if(a==='open-about'){closeOverlay('settingsOverlay');openOverlay('aboutOverlay');}else if(a==='close-about'){closeOverlay('aboutOverlay');}else if(a==='save-my-setup'){saveMySetup();}else if(a==='autofill-my-setup'){autoFillMySetup();}else if(a==='add-calendar-item'){openCalendarItemEditor();}else if(a==='toggle-todo-edit'){todoEditMode=!todoEditMode;renderTodo();}else if(a==='edit-calendar-item'){e.stopPropagation();openCalendarItemEditor(el.dataset.templateId);}else if(a==='close-calendar-item'){closeOverlay('calendarItemOverlay');}else if(a==='save-calendar-item'){saveCalendarItem();}else if(a==='delete-calendar-item'){deleteCalendarItem();}else if(a==='open-setup'){renderSetup();openOverlay('setupOverlay');}else if(a==='setup-done'||a==='setup-home'){saveModel();closeOverlay('setupOverlay');renderAll();}else if(a==='add-action')openActionEditor(el.dataset.sectionId);else if(a==='edit-action')openActionEditor(el.dataset.sectionId,el.dataset.actionId);else if(a==='toggle-calendar'){e.stopPropagation();const {act}=findAction(el.dataset.sectionId,el.dataset.actionId);if(act){act.showOnCalendar=act.showOnCalendar===false;saveModel();renderSetup();renderCalendar();toast(act.showOnCalendar?'Shown on calendar':'Hidden from calendar');}}else if(a==='move-action-up'||a==='move-action-down'){const sec=model.sections.find(s=>s.id===el.dataset.sectionId),i=sec?.actions.findIndex(x=>x.id===el.dataset.actionId)??-1;if(i>=0){const j=a==='move-action-up'?i-1:i+1;if(j>=0&&j<sec.actions.length){[sec.actions[i],sec.actions[j]]=[sec.actions[j],sec.actions[i]];saveModel();renderSetup();renderAll();}}}else if(a==='close-action')closeOverlay('actionOverlay');else if(a==='pick-day'){const n=Number(el.dataset.day);editorDaySet.has(n)?editorDaySet.delete(n):editorDaySet.add(n);renderActionScheduleControls();}else if(a==='save-action')saveActionFromEditor();else if(a==='delete-action'){const sec=model.sections.find(s=>s.id===$('actionSectionId').value),id=$('actionId').value;if(sec&&id&&confirm('Delete this actionable?')){sec.actions=sec.actions.filter(x=>x.id!==id);saveModel();closeOverlay('actionOverlay');renderSetup();renderAll();}}else if(a==='choose-photo')$('mapPhotoInput').click();else if(a==='prev-month'){viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()-1,1);renderCalendar();}else if(a==='next-month'){viewMonth=new Date(viewMonth.getFullYear(),viewMonth.getMonth()+1,1);renderCalendar();}else if(a==='today'){selectedDate=new Date(now.getFullYear(),now.getMonth(),now.getDate());viewMonth=new Date(now.getFullYear(),now.getMonth(),1);renderCalendar();renderTodo();}else if(a==='select-date'){selectedDate=parseDate(el.dataset.date);viewMonth=new Date(selectedDate.getFullYear(),selectedDate.getMonth(),1);renderCalendar();renderTodo();$('todoCard').scrollIntoView({behavior:'smooth',block:'start'});}else if(a==='print-today'){printPlanner('today');}else if(a==='print-week'){printPlanner('week');}else if(a==='print-month'){printPlanner('month');}else if(a==='new-map'){closeOverlay('settingsOverlay');createNewPriorityMap();}else if(a==='load-growth'){model=makeBlankModel();model.layout='growth';model.sectionCount=4;model.structureLocked=false;['Health','Learning','Relationships','Home'].forEach((n,i)=>model.sections[i].name=n);saveModel();renderSetup();renderAll();toast('Personal Growth loaded');}else if(a==='load-basketball'){model=makeBlankModel();model.layout='basketball';model.sectionCount=4;model.structureLocked=false;['Skills','Strength','Conditioning','Recovery'].forEach((n,i)=>model.sections[i].name=n);saveModel();renderSetup();renderAll();toast('Basketball loaded');}else if(a==='import-ihsan'){let sec=model.sections.slice(0,model.sectionCount).find(x=>!x.actions.length)||model.sections[0];sec.name='IHSAN';['Prayer','Family','Charity','Rights','Avoid Haram'].slice(0,model.layerCount).forEach(n=>{if(!sec.actions.some(a=>a.name===n))sec.actions.push({id:uid(),name:n,notes:'',estimatedTime:0,schedule:defaultNewSchedule(),showOnCalendar:false});});saveModel();renderSetup();renderAll();toast('Ihsan section imported');}else if(a==='toggle-task'){e.stopPropagation();toggleDone(el.dataset.instanceId);const d=parseDate(el.dataset.date);if(d)selectedDate=d;renderCalendar();renderTodo();}});
 document.addEventListener('change',e=>{if(e.target.id==='mapSwitcher'){
   if(e.target.value==='__new__'){createNewPriorityMap();return;}
+  if(e.target.value==='__choose__'){
+    const entries=Object.entries(mapStore.maps);
+    const answer=prompt('Choose a map:\n'+entries.map((x,i)=>(i+1)+'. '+x[1].name).join('\n'));
+    const pick=entries[(Number(answer)||0)-1];
+    if(pick){saveModel();activeMapId=pick[0];localStorage.setItem(ACTIVE_MAP_KEY,activeMapId);model=clone(pick[1].model);renderAll();}
+    renderMapSwitcher();return;
+  }
   saveModel();
   activeMapId=e.target.value;
   localStorage.setItem(ACTIVE_MAP_KEY,activeMapId);
@@ -642,6 +704,35 @@ $('actionOverlay').addEventListener('click',e=>{if(e.target===$('actionOverlay')
 $('settingsOverlay').addEventListener('click',e=>{if(e.target===$('settingsOverlay'))closeOverlay('settingsOverlay');});
 $('aboutOverlay').addEventListener('click',e=>{if(e.target===$('aboutOverlay'))closeOverlay('aboutOverlay');});
 $('calendarItemOverlay').addEventListener('click',e=>{if(e.target===$('calendarItemOverlay'))closeOverlay('calendarItemOverlay');});
+
+function showSettingsHome(){
+  document.getElementById('settingsHome').hidden=false;
+  document.querySelectorAll('.settingsSubpage').forEach(x=>x.hidden=true);
+  document.getElementById('settingsBackBtn').hidden=true;
+  document.getElementById('settingsTitle').textContent='Settings';
+}
+function showSettingsPage(page){
+  document.getElementById('settingsHome').hidden=true;
+  document.querySelectorAll('.settingsSubpage').forEach(x=>x.hidden=true);
+  const target=document.getElementById('settings-'+page);
+  if(target)target.hidden=false;
+  document.getElementById('settingsBackBtn').hidden=false;
+  const titles={'priority-maps':'Maps','priority-time':'Priority Time','print-export':'Print / Export','about':'About'};
+  document.getElementById('settingsTitle').textContent=titles[page]||'Settings';
+}
+document.addEventListener('click',e=>{
+  const row=e.target.closest('[data-settings-page]');
+  if(row){showSettingsPage(row.dataset.settingsPage);return;}
+  if(e.target.closest('#settingsBackBtn')){showSettingsHome();return;}
+  if(e.target.closest('#sharePriorityMapBtn')){
+    const current=mapStore.maps[activeMapId];
+    const payload=JSON.stringify({type:'priority-assistant-map',version:1,name:current.name,model:current.model},null,2);
+    if(navigator.share){navigator.share({title:current.name+' — Priority Map',text:payload}).catch(()=>{});}
+    else if(navigator.clipboard){navigator.clipboard.writeText(payload);alert('Priority Map copied. You can send it to someone.');}
+    else{prompt('Copy this Priority Map:',payload);}
+  }
+});
+
 renderMapSwitcher();
 renderAll();
 
