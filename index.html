@@ -137,6 +137,10 @@ header .mapSwitcher{position:relative;z-index:2;order:0}
   }
 }
 </style>
+
+<style id="pastCalendarPatch">
+.dayCell[data-past="1"] .dayNum{opacity:.5}
+</style>
 </head>
 <body>
 <div class="app" id="app">
@@ -202,6 +206,7 @@ header .mapSwitcher{position:relative;z-index:2;order:0}
       <div id="settingsHome" class="settingsMenu">
         <button class="settingsRow" type="button" data-settings-page="priority-maps"><span><b>Maps</b><small>Create, adjust, and share maps</small></span><span>›</span></button>
         <button class="settingsRow" type="button" data-settings-page="priority-time"><span><b>Priority Time</b><small>Estimated time display</small></span><span>›</span></button>
+        <button class="settingsRow" type="button" data-settings-page="calendar"><span><b>Calendar</b><small>Past-day display</small></span><span>›</span></button>
         <button class="settingsRow" type="button" data-settings-page="print-export"><span><b>Print / Export</b><small>Today, Week, or Month</small></span><span>›</span></button>
         <button class="settingsRow" type="button" data-settings-page="about"><span><b>About</b><small>Mission, vision, and values</small></span><span>›</span></button>
       </div>
@@ -215,6 +220,12 @@ header .mapSwitcher{position:relative;z-index:2;order:0}
         <div class="settingsBlock">
           <h3>Map Structure</h3>
           <div class="grid2"><div><label class="label" for="settingsSectionCount">Sections</label><select class="field" id="settingsSectionCount"><option value="4">4</option><option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option></select></div><div><label class="label" for="settingsLayerCount">Actionables / section</label><input class="field" id="settingsLayerCount" type="number" min="1" max="8" inputmode="numeric" /></div></div>
+        </div>
+      </div>
+
+      <div class="settingsSubpage" id="settings-calendar" hidden>
+        <div class="settingsBlock">
+          <div class="toggleLine"><div><span>Clear past days</span><div class="muted" style="font-size:11px;margin-top:3px">Hide calendar items after their day passes. You can still tap the date to see that day's To-Do List.</div></div><input id="clearPastCalendar" type="checkbox"></div>
         </div>
       </div>
 
@@ -444,7 +455,7 @@ function persistMapStore(){
 }
 function renderMapSwitcher(){
   const el=document.getElementById('mapSwitcher'); if(!el)return;
-  el.innerHTML=`<option value="" disabled>Maps</option>`+Object.entries(mapStore.maps).map(([id,x])=>`<option value="${id}"${id===activeMapId?' selected':''}>${esc(x.name)}</option>`).join('')+`<option value="__new__">+ New Map</option>`;
+  el.innerHTML=`<option value="__maps__" selected disabled>Maps</option>`+Object.entries(mapStore.maps).map(([id,x])=>`<option value="${id}">${esc(x.name)}</option>`).join('')+`<option value="__new__">+ New Map</option>`;
 }
 
 function createNewPriorityMap(){
@@ -516,7 +527,7 @@ function clearOccurrenceOverride(instanceId){const x=loadOverrides();delete x[in
 function saveModel(){mapStore.maps[activeMapId].model=model;persistMapStore();}
 function presetSnapshot(){const x=clone(model);x.mapPhoto='';return x;}
 function hasMySetup(){try{return !!JSON.parse(localStorage.getItem(PRESET_KEY)||'null');}catch(e){return false;}}
-function renderSettings(){setTimeout(()=>{if($('showPriorityTime'))$('showPriorityTime').checked=localStorage.getItem('pa-show-priority-time')!=='0';if($('showWeeklyAverage'))$('showWeeklyAverage').checked=localStorage.getItem('pa-show-weekly-average')==='1';if($('settingsSectionCount'))$('settingsSectionCount').value=model.sectionCount;if($('settingsLayerCount'))$('settingsLayerCount').value=model.layerCount;},0);const el=$('mySetupStatus');if(el)el.textContent=hasMySetup()?'Edited My Setup is also saved on this device.':'Built-in My Setup is ready.';}
+function renderSettings(){setTimeout(()=>{if($('showPriorityTime'))$('showPriorityTime').checked=localStorage.getItem('pa-show-priority-time')!=='0';if($('showWeeklyAverage'))$('showWeeklyAverage').checked=localStorage.getItem('pa-show-weekly-average')==='1';if($('clearPastCalendar'))$('clearPastCalendar').checked=localStorage.getItem('pa-clear-past-calendar')==='1';if($('settingsSectionCount'))$('settingsSectionCount').value=model.sectionCount;if($('settingsLayerCount'))$('settingsLayerCount').value=model.layerCount;},0);const el=$('mySetupStatus');if(el)el.textContent=hasMySetup()?'Edited My Setup is also saved on this device.':'Built-in My Setup is ready.';}
 function saveMySetup(){try{localStorage.setItem(PRESET_KEY,JSON.stringify(presetSnapshot()));renderSettings();toast('My Setup saved');}catch(e){toast('Could not save setup');}}
 function autoFillMySetup(){if(!confirm('Auto-fill your built-in My Setup? This replaces the current map setup.'))return;const photo=model.mapPhoto||'';model=makeMyLayout();model.mapPhoto=photo;saveModel();closeOverlay('settingsOverlay');renderAll();toast('My Setup filled');}
 function toast(msg){const el=$('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>el.classList.remove('show'),1400);}
@@ -638,7 +649,7 @@ function tasksForDate(date){
   return out.sort((a,b)=>a.time.localeCompare(b.time)||a.label.localeCompare(b.label));
 }
 function isDone(id){return localStorage.getItem(DONE_KEY+id)==='1';}function toggleDone(id){const k=DONE_KEY+id;localStorage.setItem(k,isDone(id)?'0':'1');}
-function renderCalendar(){$('monthTitle').textContent=viewMonth.toLocaleDateString('en-US',{month:'long',year:'numeric'});const root=$('monthGrid');root.innerHTML='';const first=new Date(viewMonth.getFullYear(),viewMonth.getMonth(),1),start=new Date(first);start.setDate(1-first.getDay());for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const cell=document.createElement('div');cell.className='dayCell'+(d.getMonth()!==viewMonth.getMonth()?' out':'')+(sameDay(d,selectedDate)?' selected':'')+(sameDay(d,now)?' today':'');cell.dataset.action='select-date';cell.dataset.date=dateKey(d);cell.innerHTML=`<div class="dayNum">${d.getDate()}</div>`;const tasks=tasksForDate(d).filter(t=>t.showOnCalendar),max=4;tasks.slice(0,max).forEach(t=>{const b=document.createElement('button');b.type='button';b.className='miniTask'+(isDone(t.instanceId)?' done':'');b.style.setProperty('--taskColor',t.color);b.dataset.action='toggle-task';b.dataset.instanceId=t.instanceId;b.dataset.date=dateKey(d);b.innerHTML=`<span class="miniCheck">${isDone(t.instanceId)?'✓':'□'}</span><span class="miniLabel">${esc(t.label)}</span>`;cell.appendChild(b);});if(tasks.length>max){const more=document.createElement('div');more.className='more';more.textContent=`+${tasks.length-max} more`;cell.appendChild(more);}root.appendChild(cell);}}
+function renderCalendar(){$('monthTitle').textContent=viewMonth.toLocaleDateString('en-US',{month:'long',year:'numeric'});const root=$('monthGrid');root.innerHTML='';const first=new Date(viewMonth.getFullYear(),viewMonth.getMonth(),1),start=new Date(first);start.setDate(1-first.getDay());for(let i=0;i<42;i++){const d=new Date(start);d.setDate(start.getDate()+i);const cell=document.createElement('div');cell.className='dayCell'+(d.getMonth()!==viewMonth.getMonth()?' out':'')+(sameDay(d,selectedDate)?' selected':'')+(sameDay(d,now)?' today':'');cell.dataset.action='select-date';cell.dataset.date=dateKey(d);if(d<new Date(now.getFullYear(),now.getMonth(),now.getDate()))cell.dataset.past='1';cell.innerHTML=`<div class="dayNum">${d.getDate()}</div>`;const todayStart=new Date(now.getFullYear(),now.getMonth(),now.getDate());const isPast=d<todayStart;const clearPast=localStorage.getItem('pa-clear-past-calendar')==='1';const tasks=(isPast&&clearPast)?[]:tasksForDate(d).filter(t=>t.showOnCalendar),max=4;tasks.slice(0,max).forEach(t=>{const b=document.createElement('button');b.type='button';b.className='miniTask'+((isDone(t.instanceId)||isPast)?' done':'');b.style.setProperty('--taskColor',t.color);b.dataset.action='toggle-task';b.dataset.instanceId=t.instanceId;b.dataset.date=dateKey(d);b.innerHTML=`<span class="miniCheck">${isDone(t.instanceId)?'✓':'□'}</span><span class="miniLabel">${esc(t.label)}</span>`;cell.appendChild(b);});if(tasks.length>max){const more=document.createElement('div');more.className='more';more.textContent=`+${tasks.length-max} more`;cell.appendChild(more);}root.appendChild(cell);}}
 function renderTodo(){
   const tasks=tasksForDate(selectedDate),root=$('todoBody');
   $('todoCount').textContent=`${tasks.filter(t=>isDone(t.instanceId)).length}/${tasks.length}`;const mins=tasks.reduce((n,t)=>n+(Number(t.estimatedTime)||0),0);const pt=$('priorityTime');pt.textContent=`Estimated Priority Time: ${mins>=60?Math.floor(mins/60)+'h '+(mins%60?mins%60+'m':''):mins+' min'}`;pt.style.display=localStorage.getItem('pa-show-priority-time')==='0'?'none':'block';
@@ -729,7 +740,7 @@ function showSettingsPage(page){
   const target=document.getElementById('settings-'+page);
   if(target)target.hidden=false;
   document.getElementById('settingsBackBtn').hidden=false;
-  const titles={'priority-maps':'Maps','priority-time':'Priority Time','print-export':'Print / Export','about':'About'};
+  const titles={'priority-maps':'Maps','priority-time':'Priority Time','calendar':'Calendar','print-export':'Print / Export','about':'About'};
   document.getElementById('settingsTitle').textContent=titles[page]||'Settings';
 }
 document.addEventListener('click',e=>{
@@ -742,6 +753,14 @@ document.addEventListener('click',e=>{
     if(navigator.share){navigator.share({title:current.name+' — Priority Map',text:payload}).catch(()=>{});}
     else if(navigator.clipboard){navigator.clipboard.writeText(payload);alert('Priority Map copied. You can send it to someone.');}
     else{prompt('Copy this Priority Map:',payload);}
+  }
+});
+
+
+document.addEventListener('change',e=>{
+  if(e.target.id==='clearPastCalendar'){
+    localStorage.setItem('pa-clear-past-calendar',e.target.checked?'1':'0');
+    renderCalendar();
   }
 });
 
